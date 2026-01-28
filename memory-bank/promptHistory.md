@@ -1,5 +1,66 @@
 # Prompt History
 
+## 2026-01-28 - Configure NTFS Permissions on Backup Folder
+
+### User Request
+"The folder $TargetPath = 'T:\ProfilesBackup' has inheritance enabled by default. Please disable the inheritance, convert the inherited into explicit ACEs and remove authenticated users. Then add domain users for only read."
+
+Followed by: "Please add the new code as a function to the backup script and call if after creating the folder 'ProfilesBackup'."
+
+### Actions Taken
+1. Created standalone `Set-FolderPermissions.ps1` script using NTFSSecurity module cmdlets:
+   - `Disable-NTFSAccessInheritance` - Disables inheritance and converts inherited ACEs to explicit
+   - `Get-NTFSAccess` + `Remove-NTFSAccess` - Removes Authenticated Users ACE
+   - `Add-NTFSAccess` - Adds Domain Users with Read permissions applied to ThisFolderSubfoldersAndFiles
+
+2. Integrated the functionality into `Backup-UserProfile.ps1`:
+   - Added `Set-BackupFolderPermissions` function in new `#region Functions` section
+   - Function accepts `Path` (mandatory) and `DomainUsersAccount` (default: 'YOURPROJECT\Domain Users') parameters
+   - Called immediately after creating the target directory in the Initialization region
+   - Respects `-Verbose` preference from parent script
+
+### Key Implementation Details
+```powershell
+function Set-BackupFolderPermissions {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path,
+        [Parameter()]
+        [string]$DomainUsersAccount = 'YOURPROJECT\Domain Users'
+    )
+
+    # Step 1: Disable inheritance (converts inherited to explicit)
+    Disable-NTFSAccessInheritance -Path $Path
+
+    # Step 2: Remove Authenticated Users
+    $authUsersAce = Get-NTFSAccess -Path $Path | Where-Object { $_.Account -like '*Authenticated Users*' }
+    if ($authUsersAce) { $authUsersAce | Remove-NTFSAccess }
+
+    # Step 3: Add Domain Users with Read
+    Add-NTFSAccess -Path $Path -Account $DomainUsersAccount -AccessRights Read -AppliesTo ThisFolderSubfoldersAndFiles
+}
+```
+
+### Integration Point
+```powershell
+if (-not (Test-Path -Path $TargetPath)) {
+    if ($PSCmdlet.ShouldProcess($TargetPath, 'Create target directory')) {
+        New-Item -Path $TargetPath -ItemType Directory -Force | Out-Null
+        Set-BackupFolderPermissions -Path $TargetPath -Verbose:$VerbosePreference
+    }
+}
+```
+
+### Files Modified
+- `source/Backup-UserProfile.ps1` (v3.2.0 → v3.3.0)
+- `memory-bank/promptHistory.md`
+
+### Files Removed
+- `Set-FolderPermissions.ps1` (standalone script replaced by integrated function)
+
+---
+
 ## 2026-01-28 - Fix Hidden Files Missing from ZIP Archives
 
 ### User Request

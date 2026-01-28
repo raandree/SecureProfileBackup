@@ -159,9 +159,61 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+#region Functions
+
+function Set-BackupFolderPermissions {
+    <#
+    .SYNOPSIS
+        Configures NTFS permissions on the backup root folder.
+
+    .DESCRIPTION
+        Disables inheritance, converts inherited ACEs to explicit,
+        removes Authenticated Users, and adds Domain Users with read access.
+
+    .PARAMETER Path
+        The folder path to configure permissions on.
+
+    .PARAMETER DomainUsersAccount
+        The Domain Users account to grant read access.
+        Default: 'Contoso\Domain Users'
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Path,
+
+        [Parameter()]
+        [string]$DomainUsersAccount = 'Builtin\Users'
+    )
+
+    Write-Verbose "Configuring NTFS permissions on backup root folder: $Path"
+
+    Write-Verbose '  Adding Administrators with FullControl...'
+    Add-NTFSAccess -Path $Path -Account Administrators -AccessRights FullControl
+
+    Write-Verbose '  Adding SYSTEM with FullControl...'
+    Add-NTFSAccess -Path $Path -Account 'NT Authority\SYSTEM' -AccessRights FullControl
+
+    Write-Verbose '  Adding additional SIDs with FullControl...'
+    Add-NTFSAccess -Path $Path -Account $AdditionalSids -AccessRights FullControl
+    
+    Write-Verbose '  Disabling inheritance and removing inherited ACEs...'
+    Disable-NTFSAccessInheritance -Path $Path -RemoveInheritedAccessRules
+    Write-Verbose '  Done: Inheritance disabled, inherited ACEs removed.'
+    
+    Write-Verbose "  Adding '$DomainUsersAccount' with Read permissions..."
+    Add-NTFSAccess -Path $Path -Account $DomainUsersAccount -AccessRights Read -AppliesTo ThisFolderSubfoldersAndFiles
+    Write-Verbose '  Done: Domain Users read access added.'
+
+    Write-Verbose 'Backup folder permissions configured successfully.'
+}
+
+#endregion
+
 #region Initialization
 
-Write-Verbose "Starting profile backup operation"
+Write-Verbose 'Starting profile backup operation'
 Write-Verbose "Mode: $BackupMode"
 Write-Verbose "Source: $SourcePath"
 Write-Verbose "Target: $TargetPath"
@@ -173,11 +225,14 @@ if (-not (Test-Path -Path $NTFSSecurityModulePath -PathType Leaf)) {
 Import-Module -Name $NTFSSecurityModulePath -ErrorAction Stop
 Write-Verbose "Loaded NTFSSecurity module from: $NTFSSecurityModulePath"
 
-# Ensure target root exists
+# Ensure target root exists and configure permissions
 if (-not (Test-Path -Path $TargetPath)) {
     if ($PSCmdlet.ShouldProcess($TargetPath, 'Create target directory')) {
         New-Item -Path $TargetPath -ItemType Directory -Force | Out-Null
         Write-Verbose "Created target directory: $TargetPath"
+
+        # Configure NTFS permissions on the newly created backup folder
+        Set-BackupFolderPermissions -Path $TargetPath -Verbose:$VerbosePreference
     }
 }
 
@@ -188,7 +243,7 @@ $results = [System.Collections.Generic.List[PSCustomObject]]::new()
 #region Main Processing
 
 $allProfiles = @(Get-ChildItem -Path $SourcePath -Directory |
-    Where-Object { $_.Name -match $ProfilePattern })
+        Where-Object { $_.Name -match $ProfilePattern })
 
 Write-Verbose "Found $($allProfiles.Count) profiles matching pattern '$ProfilePattern'"
 
@@ -198,7 +253,8 @@ foreach ($userProfile in $allProfiles) {
     # Determine destination based on mode
     if ($BackupMode -eq 'Compress') {
         $destPath = Join-Path -Path $TargetPath -ChildPath "$($userProfile.Name).zip"
-    } else {
+    }
+    else {
         $destPath = Join-Path -Path $TargetPath -ChildPath $userProfile.Name
     }
 
@@ -218,7 +274,7 @@ foreach ($userProfile in $allProfiles) {
 
         if ($BackupMode -eq 'Compress') {
             # ZIP Compression Mode
-            if ($PSCmdlet.ShouldProcess($destPath, "Compress profile to ZIP archive")) {
+            if ($PSCmdlet.ShouldProcess($destPath, 'Compress profile to ZIP archive')) {
                 # Remove existing ZIP if present
                 if (Test-Path -Path $destPath) {
                     Remove-Item -Path $destPath -Force
@@ -247,10 +303,10 @@ foreach ($userProfile in $allProfiles) {
 
                 # Map CompressionLevel to .NET enum
                 $netCompressionLevel = switch ($CompressionLevel) {
-                    'Optimal'       { [System.IO.Compression.CompressionLevel]::Optimal }
-                    'Fastest'       { [System.IO.Compression.CompressionLevel]::Fastest }
+                    'Optimal' { [System.IO.Compression.CompressionLevel]::Optimal }
+                    'Fastest' { [System.IO.Compression.CompressionLevel]::Fastest }
                     'NoCompression' { [System.IO.Compression.CompressionLevel]::NoCompression }
-                    default         { [System.IO.Compression.CompressionLevel]::Optimal }
+                    default { [System.IO.Compression.CompressionLevel]::Optimal }
                 }
 
                 # Create ZIP archive manually to support exclusion patterns
@@ -364,7 +420,8 @@ foreach ($userProfile in $allProfiles) {
             }
 
             $result.Status = 'Success'
-        } else {
+        }
+        else {
             # Mirror Mode (robocopy with NTFS permissions)
             
             # Create destination directory
@@ -466,8 +523,9 @@ if ($BackupMode -eq 'Compress') {
         $measurement = $compressedResults | Measure-Object -Property CompressedSize -Sum
         $totalSize = if ($null -ne $measurement.Sum) { $measurement.Sum } else { 0 }
         Write-Verbose "Total compressed size: $('{0:N2}' -f ($totalSize / 1MB)) MB"
-    } else {
-        Write-Verbose "No compressed archives created."
+    }
+    else {
+        Write-Verbose 'No compressed archives created.'
     }
 }
 
