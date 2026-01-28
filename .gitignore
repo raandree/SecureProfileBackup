@@ -4,10 +4,6 @@ output/
 # PowerShell module cache
 *.psm1.cache
 
-# Visual Studio Code settings (user-specific)
-.vscode/settings.json
-.vscode/launch.json
-
 # Windows system files
 Thumbs.db
 Desktop.ini
