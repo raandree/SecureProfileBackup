@@ -1,5 +1,58 @@
 # Prompt History
 
+## 2026-01-28 - Update README and Memory Bank Documentation
+
+### User Request
+"Please update the readme and memory bank according to the latest changes if required."
+
+### Analysis Performed
+1. Reviewed `source/Backup-UserProfile.ps1` (v3.2.0) - confirmed current implementation
+2. Reviewed `readme.md` - already up-to-date with v3.2.0 features
+3. Reviewed all Memory Bank files for accuracy
+
+### Changes Identified and Applied
+
+**progress.md:**
+- Updated test count from 42/42 to 45/45 (reflecting test additions)
+- Updated timestamp to 2026-01-28 14:55
+- Fixed test generator version to v1.3.0
+- Added hidden files and ACL features to test data generator description
+- Updated integration tests version to v2.0.0
+- Added "Profile Owner ACL Replication" context to test list
+- Updated fixes section with duplicate parameter error fix details
+
+**systemPatterns.md:**
+- Updated architecture diagram from BEGIN/PROCESS/END blocks to INITIALIZE/MAIN PROCESS/SUMMARY regions
+- Updated code pattern from begin/process/end to #region sections (v3.0.0 change)
+- Added tests directory to file structure
+- Added output directory to file structure
+- Added new key decisions: standalone script, .NET ZipArchive, ntuser* exclusion, v2.3.0 security model
+
+**techContext.md:**
+- Updated NTFSSecurity module note about path flexibility
+- Updated "Running the Script" section with correct paths (removed Go.ps1 references)
+- Added ExcludePatterns example to usage
+- Added robocopy file exclusion pattern integration
+- Added .NET ZipArchive integration section for Compress mode
+- Added automated testing section with Pester commands
+- Updated manual testing with correct script paths
+- Added Get-NTFSInheritance validation command
+- Added hidden files listing command
+
+**readme.md:**
+- No changes needed - already up-to-date with v3.2.0 features
+
+**promptHistory.md:**
+- Added this entry
+
+### Files Modified
+- `memory-bank/progress.md`
+- `memory-bank/systemPatterns.md`
+- `memory-bank/techContext.md`
+- `memory-bank/promptHistory.md`
+
+---
+
 ## 2026-01-28 - Configure NTFS Permissions on Backup Folder
 
 ### User Request

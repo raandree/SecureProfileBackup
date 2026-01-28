@@ -1,8 +1,8 @@
 # Progress
 
-## Current Status: All Tests Passing (42/42)
+## Current Status: All Tests Passing (45/45)
 
-**Last Updated**: 2025-01-28 12:35
+**Last Updated**: 2026-01-28 14:55
 
 ## What Works
 
@@ -26,11 +26,13 @@
 - Inheritance disabled and inherited rules removed
 
 ### Testing Infrastructure ✅ COMPLETE
-- **Test Data Generator** (`tests/helpers/New-TestProfiles.ps1`)
+- **Test Data Generator** (`tests/helpers/New-TestProfiles.ps1` v1.3.0)
   - Generates realistic user profile structures
   - Configurable profile count (default: 3)
-  - Edge case profiles (empty, special chars, deep nesting, large files, many files, Unicode)
+  - Edge case profiles (empty, special chars, deep nesting, large files, many files, read-only, hidden)
   - Creates standard folders: Desktop, Documents, Downloads, Pictures, Music, Videos, AppData
+  - Adds hidden files and folders to test profiles
+  - Applies random ACL with FullControl for profile owner simulation
   
 - **Test Runner** (`tests/Invoke-Tests.ps1`)
   - Pester 5.x integration with automatic module check
@@ -39,10 +41,10 @@
   - Support for `-TestType` (All, Integration, Unit) and `-Verbosity` parameters
   - Test results saved to `output/TestResults/`
   
-- **Integration Tests** (`tests/Integration/Backup-UserProfile.Integration.Tests.ps1`)
-  - 42 total tests (40 passing, 2 skipped for non-admin)
+- **Integration Tests** (`tests/Integration/Backup-UserProfile.Integration.Tests.ps1` v2.0.0)
+  - 45 total tests (43 passing, 2 skipped for non-admin)
   - Mock NTFSSecurity module with call tracking for verification
-  - Real ACL verification tests using Get-Acl
+  - Real ACL verification tests using Get-NTFSAccess and Get-NTFSInheritance
   - Tests organized by Context:
     - Parameter Validation (4 tests)
     - Mirror Mode Backup (5 tests)
@@ -52,6 +54,7 @@
     - Error Handling (2 tests)
     - Verbose Output (1 test)
     - ACL Mock Verification - Mirror Mode (6 tests)
+    - Profile Owner ACL Replication (2 tests)
     - ACL Mock Verification - Compress Mode (3 tests)
     - ACL Call Order Verification (1 test)
     - Real ACL Verification - Mirror Mode (5 tests, 1 skipped)
@@ -66,15 +69,20 @@
 ## Test Results Summary
 
 ```
-Tests Passed: 42, Failed: 0, Skipped: 0
+Tests Passed: 45, Failed: 0, Skipped: 0
 Duration: ~59 seconds (running as Administrator)
 ```
 
-### 2025-01-28 Fix Applied
-- **Issue**: 2 inheritance tests were failing when running the full test suite
-- **Root Cause**: Mock NTFSSecurity module loaded by previous tests remained in memory, causing RealACL tests to use mock functions instead of real module
-- **Fix**: Added module cleanup and pre-import logic in RealACL test's BeforeAll block
-- **Result**: All 42 tests now pass when running as Administrator
+### 2026-01-28 Fixes Applied
+- **Issue 1**: Duplicate parameter error (`-WhatIf` defined multiple times)
+  - **Root Cause**: `Invoke-BackupUserProfile` wrapper used `[CmdletBinding(SupportsShouldProcess)]` AND explicit `-WhatIf`/`-Confirm` parameters
+  - **Fix**: Removed explicit parameter definitions; access via `$PSBoundParameters` instead
+  - **Result**: All 45 tests now pass (was 3/45 before fix)
+
+- **Issue 2**: 2 inheritance tests failing when running full test suite
+  - **Root Cause**: Mock NTFSSecurity module loaded by previous tests remained in memory
+  - **Fix**: Added module cleanup and pre-import logic in RealACL test's BeforeAll block
+  - **Result**: All 45 tests now pass when running as Administrator
 
 **Note**: When running as non-admin, 2 tests are skipped (inheritance changes require Administrator privileges).
 

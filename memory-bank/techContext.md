@@ -18,7 +18,7 @@
 #Requires -RunAsAdministrator
 ```
 
-**Note**: NTFSSecurity module is loaded from local path (`.\NTFSSecurity\NTFSSecurity.psd1`) rather than requiring system-wide installation.
+**Note**: NTFSSecurity module can be loaded from a local path (`.\NTFSSecurity\NTFSSecurity.psd1`) or from system installation. The `-NTFSSecurityModulePath` parameter allows specifying the module location.
 
 ## Dependencies
 
@@ -73,19 +73,20 @@ Test-Path '.\NTFSSecurity\NTFSSecurity.psd1'
 
 ### Running the Script
 ```powershell
-# Default execution
-.\Go.ps1
+# Default execution (requires Administrator)
+.\source\Backup-UserProfile.ps1
 
 # With verbose output
-.\Go.ps1 -Verbose
+.\source\Backup-UserProfile.ps1 -Verbose
 
 # Dry run (preview only)
-# Dot-source then call function
-. .\Go.ps1
-Backup-UserProfile -WhatIf
+.\source\Backup-UserProfile.ps1 -WhatIf
 
 # Custom paths
-Backup-UserProfile -SourcePath 'D:\Users' -TargetPath 'E:\Backup'
+.\source\Backup-UserProfile.ps1 -SourcePath 'D:\Users' -TargetPath 'E:\Backup'
+
+# Compress mode with file exclusions
+.\source\Backup-UserProfile.ps1 -BackupMode Compress -ExcludePatterns @('ntuser*', '*.tmp')
 ```
 
 ## Technical Constraints
@@ -139,9 +140,31 @@ $robocopyArgs = @(
     '/NDL'
 )
 
+# Add file exclusion patterns if specified
+if ($ExcludePatterns.Count -gt 0) {
+    $robocopyArgs += '/XF'
+    $robocopyArgs += $ExcludePatterns
+}
+
 $process = Start-Process -FilePath 'robocopy.exe' `
     -ArgumentList $robocopyArgs `
     -NoNewWindow -Wait -PassThru
+```
+
+### .NET ZipArchive Integration (Compress Mode)
+```powershell
+# Used instead of Compress-Archive to include hidden files and support exclusions
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+$netCompressionLevel = switch ($CompressionLevel) {
+    'Optimal' { [System.IO.Compression.CompressionLevel]::Optimal }
+    'Fastest' { [System.IO.Compression.CompressionLevel]::Fastest }
+    'NoCompression' { [System.IO.Compression.CompressionLevel]::NoCompression }
+}
+
+$zipArchive = [System.IO.Compression.ZipArchive]::new($zipStream, [System.IO.Compression.ZipArchiveMode]::Create)
+# Manual file iteration with exclusion pattern support
 ```
 
 ### NTFSSecurity Patterns
@@ -161,16 +184,30 @@ Disable-NTFSAccessInheritance -Path $destPath -RemoveInheritedAccessRules
 
 ## Testing Approach
 
+### Automated Testing (Pester 5.x)
+```powershell
+# Run all tests
+cd tests
+.\Invoke-Tests.ps1
+
+# Generate test data and run tests
+.\Invoke-Tests.ps1 -GenerateTestData -IncludeEdgeCases
+
+# Run with detailed output
+.\Invoke-Tests.ps1 -Verbosity Detailed
+```
+
 ### Manual Testing
 ```powershell
 # 1. Test with WhatIf
-Backup-UserProfile -WhatIf -Verbose
+.\source\Backup-UserProfile.ps1 -WhatIf -Verbose
 
 # 2. Test single profile (modify pattern)
-Backup-UserProfile -ProfilePattern '^TestUser$' -Verbose
+.\source\Backup-UserProfile.ps1 -ProfilePattern '^TestUser$' -Verbose
 
-# 3. Verify permissions
+# 3. Verify permissions using NTFSSecurity
 Get-NTFSAccess -Path 'T:\ProfilesBackup\<profile>'
+Get-NTFSInheritance -Path 'T:\ProfilesBackup\<profile>'
 ```
 
 ### Validation Commands
@@ -184,3 +221,6 @@ Get-Module -Name NTFSSecurity -ListAvailable
 # Test path access
 Test-Path 'C:\Users'
 Test-Path 'T:\ProfilesBackup'
+
+# List hidden files in test profiles
+Get-ChildItem -Path './output/TestProfiles/10000' -Recurse -Force -Attributes Hidden

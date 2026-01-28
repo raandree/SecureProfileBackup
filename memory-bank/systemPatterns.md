@@ -4,16 +4,17 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Backup-UserProfile                        │
+│                    Backup-UserProfile.ps1                    │
 ├─────────────────────────────────────────────────────────────┤
-│  ┌─────────┐    ┌──────────┐    ┌────────────────────┐     │
-│  │  BEGIN  │───▶│ PROCESS  │───▶│        END         │     │
-│  │  Block  │    │  Block   │    │       Block        │     │
-│  └─────────┘    └──────────┘    └────────────────────┘     │
-│       │              │                    │                 │
-│       ▼              ▼                    ▼                 │
-│  Initialize     Per-Profile          Summarize             │
-│  Target Dir     Operations           Results               │
+│  ┌─────────────┐  ┌────────────────┐  ┌─────────────────┐  │
+│  │ INITIALIZE  │─▶│ MAIN PROCESS   │─▶│ SUMMARY/OUTPUT  │  │
+│  │   Region    │  │    Region      │  │     Region      │  │
+│  └─────────────┘  └────────────────┘  └─────────────────┘  │
+│        │                 │                    │             │
+│        ▼                 ▼                    ▼             │
+│   Load Module       Per-Profile          Summarize          │
+│   Create Target     Operations           Results            │
+│   Configure ACL     Mirror/Compress      Return Objects     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -24,24 +25,31 @@
 - Implements `SupportsShouldProcess` for safe operations
 - Declares `[OutputType()]` for IntelliSense and pipeline clarity
 
-### Begin-Process-End Pattern
+### Region-Based Script Structure
+The script uses `#region` sections for organization (converted from function-based to standalone script in v3.0.0):
+
 ```powershell
-begin {
-    # One-time initialization
-    # Create target directory
-    # Initialize results collection
+#region Functions
+function Set-BackupFolderPermissions {
+    # Configure NTFS permissions on backup root folder
 }
+#endregion
 
-process {
-    # Per-item processing
-    # Profile discovery
-    # Backup and permission operations
-}
+#region Initialization
+# Import NTFSSecurity module
+# Create target directory and configure permissions
+# Initialize results collection
+#endregion
 
-end {
-    # Summarization
-    # Return aggregated results
-}
+#region Main Processing
+# Profile discovery
+# Per-profile backup and permission operations
+#endregion
+
+#region Summary and Output
+# Summarization
+# Return aggregated results
+#endregion
 ```
 
 ### Splatting Pattern
@@ -103,7 +111,19 @@ if ($PSCmdlet.ShouldProcess($target, 'Operation description')) {
 ```
 SecureProfileBackup/
 ├── source/                 # Source code directory
-│   └── Backup-UserProfile.ps1  # Main script with Backup-UserProfile function
+│   └── Backup-UserProfile.ps1  # Main standalone script (v3.2.0)
+├── tests/                  # Testing infrastructure
+│   ├── Integration/        # Integration tests
+│   │   └── Backup-UserProfile.Integration.Tests.ps1
+│   ├── helpers/            # Test utilities
+│   │   └── New-TestProfiles.ps1
+│   ├── Invoke-Tests.ps1    # Test runner
+│   └── README.md           # Test documentation
+├── output/                 # Git-ignored output directory
+│   ├── TestProfiles/       # Generated test data
+│   ├── TestBackups/        # Test backup output
+│   ├── TestResults/        # JUnit XML results
+│   └── NTFSSecurity/       # Mock module (auto-generated)
 ├── memory-bank/            # Project documentation
 │   ├── projectbrief.md     # Core requirements
 │   ├── productContext.md   # User experience context
@@ -115,8 +135,8 @@ SecureProfileBackup/
 ├── .clinerules/            # AI agent instructions
 │   ├── chatmodes/          # Chat mode definitions
 │   └── instructions/       # Language-specific guidelines
-├── .vscode/                # VS Code settings
-└── .github/                # GitHub workflows
+├── .gitignore              # Git ignore patterns
+└── readme.md               # Project README
 ```
 
 ## Key Decisions
@@ -125,6 +145,9 @@ SecureProfileBackup/
 |----------|-----------|
 | Use robocopy over Copy-Item | Better performance, mirroring support, resilience |
 | NTFSSecurity module | More intuitive API than native .NET ACL handling |
-| Single function approach | Simple script, not a full module |
+| Standalone script (v3.0.0) | Direct execution without dot-sourcing; simpler deployment |
+| .NET ZipArchive for compression | Includes hidden files (unlike Compress-Archive); supports file exclusion |
 | Generic List for results | Better performance than array append |
 | Pattern-based profile selection | Flexibility for different naming conventions |
+| Default ntuser* exclusion | Avoids locked file errors during backup |
+| v2.3.0 security model | BUILTIN\Users has NO access to backups (security isolation) |
